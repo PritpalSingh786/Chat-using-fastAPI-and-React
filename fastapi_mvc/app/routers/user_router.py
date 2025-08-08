@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.config.database import SessionLocal
 from app.controllers import user_controller
 from app.utils.jwt_auth import get_current_user
+from fastapi import Query
 
 router = APIRouter()
 
@@ -24,7 +25,16 @@ async def login(request: Request, db: Session = Depends(get_db)):
     return  user_controller.login_user(db, data)
 
 @router.get("/protected-route")
-def protected_route(current_user: dict = Depends(get_current_user)):
+async def protected_route(current_user: dict = Depends(get_current_user)):
     return {"message": f"Welcome {current_user['userId']}! This is a protected route."}
+
+@router.get("/users")
+async def list_all_users(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    perPage: int = Query(10, alias="perPage", ge=1)
+):
+    return user_controller.get_all_users_except_current(db, current_user["id"], page, perPage)
 
 

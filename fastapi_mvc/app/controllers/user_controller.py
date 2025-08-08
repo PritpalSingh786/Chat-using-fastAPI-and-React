@@ -83,3 +83,21 @@ def login_user(db: Session, user_data: dict):
         "id": user.id,
         "token": access_token,
     }
+
+def get_all_users_except_current(db: Session, current_user_id: int, page: int, per_page: int):
+    query = db.query(CustomUser).filter(CustomUser.id != current_user_id)
+    total = query.count()
+    users = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    user_list = [{
+        "id": user.id,
+        "userId": user.userId,
+        "email": user.email,
+    } for user in users]
+
+    return {
+        "total": total,
+        "page": page,
+        "perPage": per_page,
+        "users": user_list,
+    }
