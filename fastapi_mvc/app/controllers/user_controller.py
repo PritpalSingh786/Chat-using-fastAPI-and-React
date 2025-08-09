@@ -66,15 +66,20 @@ def login_user(db: Session, user_data: dict):
     # 3. Check password
     if not bcrypt.checkpw(user_data["password"].encode("utf-8"), user.password.encode("utf-8")):
         raise HTTPException(status_code=401, detail="Invalid userId or password")
+    
+    # 4. Mark user as logged in
+    user.isLogin = True
+    db.commit()
+    db.refresh(user)
 
-    # 4. Return user (or generate token if needed)
+    # 5. Return user (or generate token if needed)
     access_token = create_access_token(data={
         "userId": user.userId,
         "id": user.id,
         "email": user.email,
         "iat": int(datetime.utcnow().timestamp())
     },
-    expires_delta=timedelta(minutes=60)
+    # expires_delta=timedelta(minutes=60)
     )
     return {
         "message": "Login successful",
@@ -84,8 +89,26 @@ def login_user(db: Session, user_data: dict):
         "token": access_token,
     }
 
+def logout_user(db: Session, current_user_id: int):
+    user = db.query(CustomUser).filter(CustomUser.id == current_user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Mark as logged out
+    user.isLogin = False
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": "Logout successful",
+        "userId": user.userId,
+        "isLogin": user.isLogin
+    }
+
 def get_all_users_except_current(db: Session, current_user_id: int, page: int, per_page: int):
-    query = db.query(CustomUser).filter(CustomUser.id != current_user_id)
+    query = db.query(CustomUser).filter(CustomUser.id != current_user_id).order_by(CustomUser.createdAt.desc())
+    print(query, "qqqq")
     total = query.count()
     users = query.offset((page - 1) * per_page).limit(per_page).all()
 
@@ -101,3 +124,4 @@ def get_all_users_except_current(db: Session, current_user_id: int, page: int, p
         "perPage": per_page,
         "users": user_list,
     }
+
