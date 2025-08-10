@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.message import Message
 from app.models.user import CustomUser
 from app.config.database import async_session
+from typing import List, Dict, Any
 
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins="*")
 
@@ -52,3 +53,10 @@ async def send_message(sid, data):
     receiver_sid = user_socket_map.get(data['receiver_id'])
     if receiver_sid:
         await sio.emit('receive_message', data, room=receiver_sid)
+
+async def send_notification_to_invitedUsers(user_ids: List[str], event_name: str, 
+                                            data: Dict[str, Any]):
+    for user_id in user_ids:
+        if user_id in user_socket_map:
+            socket_id = user_socket_map[user_id]
+            await sio.emit(event_name, data, room=socket_id)

@@ -1,4 +1,4 @@
-from app.models.user import CustomUser
+from app.models.user import CustomUser, Post, Notification
 from app.models.message import Message
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
@@ -6,6 +6,12 @@ import bcrypt
 from app.utils.jwt_handler import create_access_token
 from datetime import timedelta, datetime
 from zoneinfo import ZoneInfo
+from app.socket_manager import send_notification_to_invitedUsers
+import asyncio
+from sqlalchemy import func, text
+from sqlalchemy.dialects.postgresql import JSONB  # If using PostgreSQL
+from sqlalchemy.sql.expression import cast
+from sqlalchemy.types import JSON
 
 
 def create_user(db: Session, user_data: dict):
@@ -165,3 +171,119 @@ def messages(db: Session, user_data: dict):
     ]
     return result
 
+def createPost(db: Session, data: dict):
+    # Validate required fields
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Request body cannot be empty"
+        )
+    if 'postTitle' not in data or not data['postTitle']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Post title is required"
+        )
+    
+    if 'invited_ids' not in data or not data['invited_ids']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invited IDs are required"
+        )
+    
+    # Validate invited_ids is a list
+    if not isinstance(data['invited_ids'], list):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invited IDs must be provided as a list"
+        )
+    
+    current_id = data['id']
+    print(current_id)
+    title = data['postTitle']
+    invited_ids = data['invited_ids']
+    
+    # Validate not inviting yourself
+    if current_id in invited_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot invite yourself"
+        )
+    
+    # Validate maximum invited users
+    if len(invited_ids) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 5 users can be invited"
+        )
+    
+    # Verify all invited users exist
+    existing_ids = {user.id for user in db.query(CustomUser.id).filter(CustomUser.id.in_(invited_ids)).all()}
+    invalid_ids = set(invited_ids) - existing_ids
+    if invalid_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Invalid user IDs: {invalid_ids}"
+        )
+    
+    # Create the post
+    try:
+        post = Post(
+            postTitle=title,
+            invited_user_ids=invited_ids
+        )
+        db.add(post)
+        db.commit()
+        db.refresh(post)
+        message = f"User {data['userId']} invited you to join '{title}'"
+        notification = Notification(
+            notifyTextMessage=message,
+            invited_user_ids=invited_ids
+        )
+        db.add(notification)
+        db.commit()
+        db.refresh(notification)
+        print(post, "posttttt")
+        notification_data = {
+            "message": message,
+        }
+        asyncio.create_task(send_notification_to_invitedUsers(
+            user_ids=invited_ids,
+            event_name='send_notification_to_invitedUsers',
+            data=notification_data
+            ))
+        return {
+            "status": "success",
+            "message": "Post created successfully",
+            "data": post
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Post creation failed: {str(e)}"
+        )
+
+def get_notifications(db: Session, current_user_id: int, page: int, per_page: int):
+    # JSON_CONTAINS(invited_user_ids, 'current_user_id') requires the value as JSON string
+    current_user_json = f'"{current_user_id}"'  # wrap the id in double quotes to match JSON string
+
+    query = db.query(Notification).filter(
+        func.JSON_CONTAINS(Notification.invited_user_ids, current_user_json)
+    ).order_by(Notification.createdAt.desc())
+
+    total = query.count()
+    notifications = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    notification_list = [{
+        "id": n.id,
+        "notifyTextMessage": n.notifyTextMessage,
+        "invited_user_ids": n.invited_user_ids,
+        "createdAt": n.createdAt.isoformat() if n.createdAt else None,
+    } for n in notifications]
+
+    return {
+        "total": total,
+        "page": page,
+        "perPage": per_page,
+        "notifications": notification_list,
+    }

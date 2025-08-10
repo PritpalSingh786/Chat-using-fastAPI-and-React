@@ -6,6 +6,8 @@ from app.utils.jwt_auth import get_current_user
 from fastapi import Query
 
 router = APIRouter()
+from pydantic import BaseModel
+from typing import List
 
 def get_db():
     db = SessionLocal()
@@ -48,6 +50,29 @@ async def list_all_users(
 async def messages(senderId: str, receiverId: str, db: Session = Depends(get_db), 
                         current_user: dict = Depends(get_current_user),):
       return user_controller.messages(db, {"senderId": senderId, "receiverId": receiverId})
+
+class CreatePostRequest(BaseModel):
+    postTitle: str
+    invited_ids: List[str]
+
+
+@router.post("/createPost")
+async def createPost(post_data: CreatePostRequest, db: Session = Depends(get_db), 
+                     current_user: dict = Depends(get_current_user),):
+    data = post_data.dict()
+    data['id'] = current_user['id']
+    data['userId'] = current_user['userId']
+    return user_controller.createPost(db, data)
+
+@router.get("/notifications")
+async def get_notifications(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    perPage: int = Query(10, alias="perPage", ge=1)
+):
+    return user_controller.get_notifications(db, current_user["id"], page, perPage)
+
 
 
 
