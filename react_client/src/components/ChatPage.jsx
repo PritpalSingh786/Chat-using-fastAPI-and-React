@@ -23,14 +23,12 @@ function ChatPage() {
 
   const handleNext = () => {
     if (hasNext) {
-      dispatch(setCurrentChatUser(null)); // Clear selected chat
       dispatch(fetchUsers({ page: page + 1, perPage }));
     }
   };
 
   const handlePrev = () => {
     if (hasPrev) {
-      dispatch(setCurrentChatUser(null)); // Clear selected chat
       dispatch(fetchUsers({ page: page - 1, perPage }));
     }
   };
