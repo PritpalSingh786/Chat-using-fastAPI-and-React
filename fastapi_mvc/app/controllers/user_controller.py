@@ -1,9 +1,11 @@
 from app.models.user import CustomUser
+from app.models.message import Message
 from sqlalchemy.orm import Session
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 import bcrypt
 from app.utils.jwt_handler import create_access_token
 from datetime import timedelta, datetime
+from zoneinfo import ZoneInfo
 
 
 def create_user(db: Session, user_data: dict):
@@ -124,4 +126,42 @@ def get_all_users_except_current(db: Session, current_user_id: int, page: int, p
         "perPage": per_page,
         "users": user_list,
     }
+
+def messages(db: Session, user_data: dict):
+    print(user_data,"userdddddd")
+    if not user_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Request body cannot be empty. senderId and receiverId are required."
+        )
+    # Manual validation for required keys
+    if "senderId" not in user_data or "receiverId" not in user_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Both senderId and receiverId are required."
+        )
+    
+    messages = (
+        db.query(Message)
+        .filter(
+            Message.sender_id.in_([user_data["senderId"], user_data["receiverId"]]),
+            Message.receiver_id.in_([user_data["senderId"], user_data["receiverId"]])
+        )
+        .order_by(Message.createdAt)
+        .all()
+    )
+    result = [
+    {
+        "senderId": msg.sender_id,
+        "receiverId": msg.receiver_id,
+        "message": msg.message,
+        "createdAt": msg.createdAt.replace(
+            tzinfo=ZoneInfo("UTC")
+        ).astimezone(
+            ZoneInfo("Asia/Kolkata")
+        ).strftime("%Y-%m-%d %H:%M:%S")
+    }
+    for msg in messages
+    ]
+    return result
 

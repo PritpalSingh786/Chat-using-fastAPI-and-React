@@ -8,6 +8,7 @@ import SidebarPage from "./components/SidebarPage";
 import ChatPage from "./components/ChatPage";
 import UserChat from "./components/UserChat";
 import AddPostPage from "./components/AddPostPage";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
@@ -17,17 +18,33 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Sidebar layout with nested routes */}
-        <Route path="/sidebar" element={<SidebarPage />}>
-          {/* Make chat a parent route with nested user chat */}
+        {/* Protected Sidebar */}
+        <Route
+          path="/sidebar"
+          element={
+            <ProtectedRoute>
+              <SidebarPage />
+            </ProtectedRoute>
+          }
+        >
+          {/* Chat */}
           <Route path="chat" element={<ChatPage />}>
             <Route path=":userId" element={<UserChat />} />
           </Route>
 
+          {/* Post */}
           <Route path="post" element={<AddPostPage />} />
         </Route>
 
-        <Route path="/" element={<h1>Welcome Home</h1>} />
+        {/* Redirect root to sidebar */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <SidebarPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </Router>
   );

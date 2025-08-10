@@ -1,95 +1,112 @@
+// src/components/UserChat.jsx
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import io from "socket.io-client";
 import "./UserChat.css";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+import { fetchMessages, addMessage } from "../features/messagesSlice";
 
 const SOCKET_SERVER_URL = "http://localhost:8000";
 
 function UserChat() {
   const { userId } = useParams();
-  const loggedInUserId = useSelector((state) => state.auth.user.id);
+  const dispatch = useDispatch();
+
+  const loggedInUserId = useSelector((state) => state.auth.user?.id);
+  const token = useSelector((state) => state.auth.token);
   const userList = useSelector((state) => state.users.list);
-  
-  const currentChatUser = userList.find(user => user.id === userId);
-  
+  const messages = useSelector((state) => state.messages.list);
+  const loading = useSelector((state) => state.messages.loading);
+
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([]);
   const [socket, setSocket] = useState(null);
 
-  // Initialize socket connection
+  const currentChatUser = userList.find(u => String(u.id) === String(userId));
+
+  // Fetch chat history when opening chat
   useEffect(() => {
+    if (loggedInUserId && userId && token) {
+      dispatch(fetchMessages({
+        senderId: loggedInUserId,
+        receiverId: userId,
+        token
+      }));
+    }
+  }, [dispatch, loggedInUserId, userId, token]);
+
+  // Socket connection
+  useEffect(() => {
+    if (!token || !loggedInUserId) return;
+
     const newSocket = io(SOCKET_SERVER_URL, {
-      query: { userId: loggedInUserId }
+      query: { userId: loggedInUserId },
+      extraHeaders: {
+        Authorization: `Bearer ${token}`
+      }
     });
     setSocket(newSocket);
 
     newSocket.emit("register_user", loggedInUserId);
 
     return () => {
-      if (newSocket) {
-        newSocket.disconnect();
-      }
+      newSocket.disconnect();
     };
-  }, [userId, loggedInUserId]);
+  }, [loggedInUserId, token]);
 
-  // Handle incoming messages
+  // Listen for incoming messages
   useEffect(() => {
     if (!socket) return;
 
-    const handleReceiveMessage = (data) => {
-      if (
-        (data.sender_id === userId || data.receiver_id === userId) &&
-        (data.sender_id === loggedInUserId || data.receiver_id === loggedInUserId)
-      ) {
-        setMessages(prev => {
-          const messageExists = prev.some(msg => 
-            msg.text === data.message && 
-            new Date(msg.time).getTime() === new Date(data.timestamp).getTime()
-          );
-          
-          if (!messageExists) {
-            return [
-              ...prev,
-              {
-                text: data.message,
-                from: data.sender_id === loggedInUserId ? "me" : "other",
-                time: new Date(data.timestamp),
-                senderId: data.sender_id
-              }
-            ];
-          }
-          return prev;
-        });
-      }
-    };
+    socket.on("receive_message", (data) => {
+      // Ignore if the message is from the logged-in user to avoid duplicates
+      if (String(data.sender_id) === String(loggedInUserId)) return;
 
-    socket.on("receive_message", handleReceiveMessage);
+      // Check if it belongs to this conversation
+      if (
+        (String(data.sender_id) === String(userId) || String(data.receiver_id) === String(userId)) &&
+        (String(data.sender_id) === String(loggedInUserId) || String(data.receiver_id) === String(loggedInUserId))
+      ) {
+        dispatch(addMessage({
+          text: data.message,
+          from: "other",
+          time: new Date(data.timestamp),
+          senderId: data.sender_id
+        }));
+      }
+    });
 
     return () => {
-      if (socket) {
-        socket.off("receive_message", handleReceiveMessage);
-      }
+      socket.off("receive_message");
     };
-  }, [socket, loggedInUserId, userId]);
+  }, [socket, loggedInUserId, userId, dispatch]);
 
+  // Auto-scroll to latest message
+  useEffect(() => {
+    const container = document.querySelector(".messages-section");
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [messages]);
+
+  // Send message
   const handleSend = () => {
     if (!message.trim() || !socket) return;
 
     const timestamp = new Date();
-    const newMessage = {
+
+    // Show message instantly in UI
+    dispatch(addMessage({
       text: message,
       from: "me",
       time: timestamp,
       senderId: loggedInUserId
-    };
+    }));
 
-    setMessages(prev => [...prev, newMessage]);
-    
+    // Emit to server
     socket.emit("send_message", {
       sender_id: loggedInUserId,
       receiver_id: userId,
-      message: message,
+      message,
       timestamp: timestamp.toISOString()
     });
 
@@ -97,75 +114,35 @@ function UserChat() {
   };
 
   const getDisplayName = (senderId) => {
-    if (senderId === loggedInUserId) return "You";
-    const sender = userList.find(user => user.id === senderId);
+    if (String(senderId) === String(loggedInUserId)) return "You";
+    const sender = userList.find(u => String(u.id) === String(senderId));
     return sender?.userId || "User";
   };
 
   const formatDateTime = (date) => {
     if (!(date instanceof Date)) date = new Date(date);
-    return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    return `${date.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" })} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   };
-
-  // Group consecutive messages from the same sender
-  const groupConsecutiveMessages = (messages) => {
-    if (messages.length === 0) return [];
-    
-    const grouped = [];
-    let currentGroup = [messages[0]];
-    
-    for (let i = 1; i < messages.length; i++) {
-      const prevMsg = messages[i - 1];
-      const currentMsg = messages[i];
-      
-      if (currentMsg.from === prevMsg.from && 
-          currentMsg.senderId === prevMsg.senderId &&
-          (currentMsg.time - prevMsg.time) < 60000) {
-        currentGroup.push(currentMsg);
-      } else {
-        grouped.push(currentGroup);
-        currentGroup = [currentMsg];
-      }
-    }
-    
-    grouped.push(currentGroup);
-    return grouped;
-  };
-
-  const sortedMessages = [...messages].sort((a, b) => a.time - b.time);
-  const groupedMessages = groupConsecutiveMessages(sortedMessages);
 
   return (
     <div className="userchat-container">
       <h2>Chat with {currentChatUser?.userId || "User"}</h2>
 
       <div className="messages-section">
-        {groupedMessages.length === 0 ? (
+        {loading ? (
+          <p>Loading messages...</p>
+        ) : messages.length === 0 ? (
           <p className="no-messages">No messages yet. Start the conversation!</p>
         ) : (
-          groupedMessages.map((messageGroup, groupIdx) => (
-            <div
-              key={`group-${groupIdx}`}
-              className={`message-group ${messageGroup[0].from === "me" ? "sent" : "received"}`}
-            >
-              {messageGroup[0].from !== "me" && (
-                <div className="message-sender">
-                  {getDisplayName(messageGroup[0].senderId)}
-                </div>
-              )}
-              {messageGroup.map((msg, msgIdx) => (
-                <div
-                  key={`${msg.time.getTime()}-${msgIdx}`}
-                  className={`message-bubble ${msg.from === "me" ? "sent" : "received"}`}
-                >
-                  <span className="message-text">{msg.text}</span>
-                  {msgIdx === messageGroup.length - 1 && (
-                    <span className="message-time">
-                      {formatDateTime(msg.time)}
-                    </span>
-                  )}
-                </div>
-              ))}
+          messages.map((msg, idx) => (
+            <div key={idx} className={`message-group ${msg.from === "me" ? "sent" : "received"}`}>
+              <div className="message-sender">
+                {getDisplayName(msg.senderId)}
+                <span className="message-heading-time">{formatDateTime(msg.time)}</span>
+              </div>
+              <div className={`message-bubble ${msg.from === "me" ? "sent" : "received"}`}>
+                <span className="message-text">{msg.text}</span>
+              </div>
             </div>
           ))
         )}

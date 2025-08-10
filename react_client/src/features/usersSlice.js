@@ -1,30 +1,26 @@
 // src/features/usersSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import axios from "axios";
 
+// Async thunk to fetch users with pagination and Bearer token
 export const fetchUsers = createAsyncThunk(
   "users/fetchUsers",
-  async ({ page = 1, perPage = 10 }, { getState, rejectWithValue }) => {
+  async ({ page, perPage }, { rejectWithValue }) => {
     try {
-      const token = getState().auth.token;
-      const res = await fetch(
-        `http://127.0.0.1:8000/users?page=${page}&perPage=${perPage}`,
+      const token = localStorage.getItem("token"); // Get token
+      const res = await axios.get(
+        `http://localhost:8000/users?page=${page}&perPage=${perPage}`,
         {
-          method: "GET",
           headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${token}`, // Send token
           },
         }
       );
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        return rejectWithValue(errorData.detail || "Failed to fetch users");
-      }
-
-      return await res.json(); // { total, page, perPage, users: [...] }
+      return res.data;
     } catch (err) {
-      return rejectWithValue(err.message);
+      return rejectWithValue(
+        err.response?.data?.message || err.message || "Error fetching users"
+      );
     }
   }
 );
@@ -33,15 +29,23 @@ const usersSlice = createSlice({
   name: "users",
   initialState: {
     list: [],
-    loading: false,
-    error: null,
     total: 0,
     page: 1,
     perPage: 10,
     hasNext: false,
     hasPrev: false,
+    loading: false,
+    error: null,
+    currentChatUser: null, // Selected chat user
   },
-  reducers: {},
+  reducers: {
+    setCurrentChatUser: (state, action) => {
+      state.currentChatUser = action.payload;
+    },
+    clearCurrentChatUser: (state) => {
+      state.currentChatUser = null; // Clear chat
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchUsers.pending, (state) => {
@@ -49,20 +53,22 @@ const usersSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchUsers.fulfilled, (state, action) => {
-        const { users, total, page, perPage } = action.payload;
         state.loading = false;
-        state.list = users;
-        state.total = total;
-        state.page = page;
-        state.perPage = perPage;
-        state.hasPrev = page > 1;
-        state.hasNext = page * perPage < total;
+        state.list = action.payload.users || [];
+        state.total = action.payload.total || 0;
+        state.page = action.payload.page || 1;
+        state.perPage = action.payload.perPage || 10;
+        state.hasNext =
+          action.payload.page * action.payload.perPage <
+          action.payload.total;
+        state.hasPrev = action.payload.page > 1;
       })
       .addCase(fetchUsers.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = action.payload || "Failed to fetch users";
       });
   },
 });
 
+export const { setCurrentChatUser, clearCurrentChatUser } = usersSlice.actions;
 export default usersSlice.reducer;

@@ -44,6 +44,11 @@ async def list_all_users(
 ):
     return user_controller.get_all_users_except_current(db, current_user["id"], page, perPage)
 
+@router.get("/messages")
+async def messages(senderId: str, receiverId: str, db: Session = Depends(get_db), 
+                        current_user: dict = Depends(get_current_user),):
+      return user_controller.messages(db, {"senderId": senderId, "receiverId": receiverId})
+
 
 
 

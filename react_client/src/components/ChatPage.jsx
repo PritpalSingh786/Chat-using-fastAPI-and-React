@@ -1,39 +1,41 @@
+// src/pages/ChatPage.jsx
 import React, { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { fetchUsers } from "../features/usersSlice";
+import { fetchUsers, setCurrentChatUser } from "../features/usersSlice";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import "./ChatPage.css";
 
 function ChatPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
   const { user } = useSelector((state) => state.auth);
-  const { list, loading, error, page, perPage, hasNext, hasPrev } = useSelector(
-    (state) => state.users
-  );
+  const { list, loading, error, page, perPage, hasNext, hasPrev, currentChatUser } =
+    useSelector((state) => state.users);
 
   useEffect(() => {
-    // Redirect if not logged in
     if (!user) {
       navigate("/login");
       return;
     }
-
     dispatch(fetchUsers({ page: 1, perPage }));
   }, [dispatch, user, perPage, navigate]);
 
   const handleNext = () => {
-    if (hasNext) dispatch(fetchUsers({ page: page + 1, perPage }));
+    if (hasNext) {
+      dispatch(setCurrentChatUser(null)); // Clear selected chat
+      dispatch(fetchUsers({ page: page + 1, perPage }));
+    }
   };
 
   const handlePrev = () => {
-    if (hasPrev) dispatch(fetchUsers({ page: page - 1, perPage }));
+    if (hasPrev) {
+      dispatch(setCurrentChatUser(null)); // Clear selected chat
+      dispatch(fetchUsers({ page: page - 1, perPage }));
+    }
   };
 
-  // Return null or loading spinner if no user
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <div className="chatpage-container" style={{ display: "flex", gap: "1rem" }}>
@@ -47,25 +49,56 @@ function ChatPage() {
         <ul className="users-list">
           {list.map((u) => (
             <li key={u.id}>
-              <Link to={`${u.id}`}>{u.userId}</Link>
+              <Link
+                to={`${u.id}`}
+                onClick={() => dispatch(setCurrentChatUser(u))}
+              >
+                {u.userId}
+              </Link>
             </li>
           ))}
         </ul>
 
         <div className="pagination-controls">
-          <button onClick={handlePrev} disabled={!hasPrev}>
+          <button
+            onClick={handlePrev}
+            disabled={!hasPrev}
+            style={{
+              backgroundColor: "#8000ff",
+              color: "white",
+              padding: "6px 12px",
+              border: "none",
+              borderRadius: "4px",
+            }}
+          >
             ⬅ Previous
           </button>
-          <span>Page {page}</span>
-          <button onClick={handleNext} disabled={!hasNext}>
+          <span style={{ margin: "0 10px" }}>Page {page}</span>
+          <button
+            onClick={handleNext}
+            disabled={!hasNext}
+            style={{
+              backgroundColor: "#8000ff",
+              color: "white",
+              padding: "6px 12px",
+              border: "none",
+              borderRadius: "4px",
+            }}
+          >
             Next ➡
           </button>
         </div>
       </div>
 
       {/* Chat content for selected user */}
-      <div style={{ flex: "2 1 600px", borderLeft: "1px solid #ccc", paddingLeft: "1rem" }}>
-        <Outlet />
+      <div
+        style={{
+          flex: "2 1 600px",
+          borderLeft: "1px solid #ccc",
+          paddingLeft: "1rem",
+        }}
+      >
+        {currentChatUser ? <Outlet /> : <p>Select a user to start chat</p>}
       </div>
     </div>
   );

@@ -8,6 +8,7 @@
   flex-direction: column;
   gap: 10px;
   height: 80vh;
+  background-color: #fff;
 }
 
 .messages-section {
@@ -72,21 +73,21 @@
 
 .message-sender {
   font-size: 12px;
-  color: #666;
+  font-weight: 500;
+  color: #555;
   margin-bottom: 4px;
-  margin-left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.message-heading-time {
+  font-size: 11px;
+  color: #999;
 }
 
 .message-text {
   margin-right: 8px;
-}
-
-.message-time {
-  font-size: 11px;
-  color: #999;
-  white-space: nowrap;
-  display: inline-block;
-  vertical-align: bottom;
 }
 
 .send-message-section {
