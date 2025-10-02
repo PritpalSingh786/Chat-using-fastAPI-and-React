@@ -42,7 +42,10 @@ app = socket_app
 
 '''
 Migrations commands for FastAPI using alembic
-
+pip install alembic sqlalchemy
+pip install asyncpg psycopg2-binary  # for PostgreSQL
+pip install aiomysql                 # for MySQL
+alembic init alembic
 alembic revision --autogenerate -m "add phoneNumber to users"
 alembic upgrade head
 alembic downgrade -1
