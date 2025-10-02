@@ -26,7 +26,7 @@ app.add_middleware(
 )
 
 # Create tables on startup (or do this separately with Alembic)
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine)
 
 # Include your REST routers
 app.include_router(user_router.router)
@@ -37,3 +37,15 @@ socket_app = socketio.ASGIApp(sio, app)
 
 # Override the app with the socket.io ASGI app for deployment
 app = socket_app
+
+
+
+'''
+Migrations commands for FastAPI using alembic
+
+alembic revision --autogenerate -m "add phoneNumber to users"
+alembic upgrade head
+alembic downgrade -1
+
+
+'''

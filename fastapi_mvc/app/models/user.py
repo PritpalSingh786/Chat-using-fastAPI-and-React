@@ -9,6 +9,7 @@ class CustomUser(CommonModel):
     email = Column(String(255), unique=True, nullable=False)
     password = Column(String(255), nullable=False)
     isLogin = Column(Boolean, default=False)
+    phoneNumber = Column(String(20), unique=True, nullable=True)
 
     # Removed the many-to-many relationships since we're using JSON lists now
 
