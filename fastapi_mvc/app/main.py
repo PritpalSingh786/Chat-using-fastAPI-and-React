@@ -46,9 +46,14 @@ pip install alembic sqlalchemy
 pip install asyncpg psycopg2-binary  # for PostgreSQL
 pip install aiomysql                 # for MySQL
 alembic init alembic
-alembic revision --autogenerate -m "add phoneNumber to users"
-alembic upgrade head
-alembic downgrade -1
+python -m alembic revision --autogenerate -m "add phoneNumber to users"
+python -m alembic upgrade head
+python -m alembic downgrade -1
+
+Server Run for FastAPI with Uvicorn:
+uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8001 # for port change
+
 
 
 '''
